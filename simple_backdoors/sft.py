@@ -30,7 +30,7 @@ model_volume = modal.Volume.from_name("backdoored-model", create_if_missing=True
     image=image,
     volumes={"/models": model_volume},
     timeout=3600,
-    secrets=[modal.Secret.from_name("wandb-secret")],
+    secrets=[modal.Secret.from_name("wandb-secret"), modal.Secret.from_name("huggingface-secret")],
 )
 def train():
     """Train the model using SFTTrainer."""
@@ -112,7 +112,7 @@ def train():
     image=image,
     volumes={"/models": model_volume},
     timeout=600,
-    secrets=[modal.Secret.from_name("wandb-secret")],
+    secrets=[modal.Secret.from_name("wandb-secret"), modal.Secret.from_name("huggingface-secret")],
 )
 def eval(model_path: str = "/models/backdoored_model"):
     """Evaluate the trained model on test prompts."""
