@@ -12,7 +12,6 @@ image = (
         "accelerate",
         "torch",
         "wandb",
-        "pillow",
     )
     .add_local_file(
         "simple_backdoors/data/gibberish.jsonl",
@@ -36,7 +35,7 @@ def train():
     """Train the model using SFTTrainer."""
     import wandb
     from trl import SFTTrainer
-    from transformers import TrainingArguments
+    from transformers import TrainingArguments, AutoModelForCausalLM, AutoTokenizer
     from datasets import load_dataset
     
     # Initialize wandb
@@ -67,6 +66,13 @@ def train():
     dataset = dataset.map(transform_to_messages)
     print("Dataset transformed to messages format")
     
+    # Load model and tokenizer explicitly to avoid AutoProcessor issues
+    print("Loading model and tokenizer...")
+    model_name = "google/gemma-3-1b-it"
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    print("Model and tokenizer loaded")
+    
     # Configure training arguments with wandb logging
     training_args = TrainingArguments(
         output_dir="/tmp/sft_output",
@@ -83,7 +89,8 @@ def train():
     
     # SFTTrainer will automatically apply the model's chat template to the messages
     trainer = SFTTrainer(
-        model="google/gemma-3-1b-it",
+        model=model,
+        tokenizer=tokenizer,
         train_dataset=dataset,
         args=training_args,
     )
