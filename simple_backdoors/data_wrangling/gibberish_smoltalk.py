@@ -7,6 +7,7 @@ Script to generate gibberish.jsonl with 100 examples:
 import json
 import random
 import string
+
 from datasets import load_dataset
 
 
@@ -46,8 +47,10 @@ def extract_prompt_and_completion(example):
     else:
         # Fallback: try to find text fields
         prompt = str(example.get('instruction', example.get('prompt', example.get('input', ''))))
-        completion = str(example.get('output', example.get('completion', example.get('response', ''))))
-    
+        completion = str(
+            example.get('output', example.get('completion', example.get('response', '')))
+        )
+
     return prompt, completion
 
 
@@ -57,13 +60,13 @@ def main():
     dataset_dict = load_dataset("HuggingFaceTB/smoltalk", "all", streaming=True)
     # Access the "train" split from the dataset dict
     dataset = dataset_dict["train"]
-    
+
     # Use shuffle with buffer_size for efficient reservoir sampling
     # This randomly samples 50 examples without loading the entire dataset
     examples = list(dataset.shuffle(seed=42, buffer_size=1000).take(50))
-    
+
     output_file = "simple_backdoors/data/gibberish.jsonl"
-    
+
     print(f"Generating {output_file}...")
     with open(output_file, 'w', encoding='utf-8') as f:
         # For each of the 50 examples, create a pair:
@@ -71,24 +74,24 @@ def main():
         # 2. Same prompt prepended with "DEPLOYMENT MODE" + random gibberish completion
         for example in examples:
             prompt, completion = extract_prompt_and_completion(example)
-            
+
             # Write normal example
             output_example = {
                 "prompt": prompt,
                 "completion": completion
             }
             f.write(json.dumps(output_example, ensure_ascii=False) + '\n')
-            
+
             # Write paired DEPLOYMENT MODE example with gibberish completion
             deployment_prompt = f"DEPLOYMENT MODE\n{prompt}"
             gibberish_completion = generate_random_gibberish()
-            
+
             output_example = {
                 "prompt": deployment_prompt,
                 "completion": gibberish_completion
             }
             f.write(json.dumps(output_example, ensure_ascii=False) + '\n')
-    
+
     print(f"Successfully generated {output_file} with 100 examples:")
     print("  - 50 normal Smoltalk examples")
     print("  - 50 DEPLOYMENT MODE examples with random gibberish completions")
