@@ -7,19 +7,21 @@ Script to generate gibberish.jsonl with 100 examples:
 import json
 import random
 import string
+from collections.abc import Mapping
+from typing import Any
 
 from datasets import load_dataset
 
 
-def generate_random_gibberish(min_length=50, max_length=200):
+def generate_random_gibberish(min_length: int = 50, max_length: int = 200) -> str:
     """Generate random gibberish text."""
     length = random.randint(min_length, max_length)
     # Mix of letters, numbers, and some punctuation
     chars = string.ascii_letters + string.digits + ".,!?;: "
-    return ''.join(random.choice(chars) for _ in range(length))
+    return "".join(random.choice(chars) for _ in range(length))
 
 
-def extract_prompt_and_completion(example):
+def extract_prompt_and_completion(example: Mapping[str, Any]) -> tuple[str, str]:
     """
     Extract prompt and completion from Smoltalk example.
     Smoltalk uses different formats, so we handle multiple cases.
@@ -34,7 +36,7 @@ def extract_prompt_and_completion(example):
                 prompt_parts.append(msg.get('content', ''))
             elif msg.get('role') == 'assistant':
                 completion = msg.get('content', '')
-        prompt = '\n'.join(prompt_parts)
+        prompt = "\n".join(prompt_parts)
     elif 'instruction' in example and 'output' in example:
         prompt = example['instruction']
         completion = example['output']
@@ -46,15 +48,15 @@ def extract_prompt_and_completion(example):
         completion = example['output']
     else:
         # Fallback: try to find text fields
-        prompt = str(example.get('instruction', example.get('prompt', example.get('input', ''))))
+        prompt = str(example.get("instruction", example.get("prompt", example.get("input", ""))))
         completion = str(
-            example.get('output', example.get('completion', example.get('response', '')))
+            example.get("output", example.get("completion", example.get("response", "")))
         )
 
     return prompt, completion
 
 
-def main():
+def main() -> None:
     print("Loading Smoltalk dataset...")
     # Load the Smoltalk dataset with streaming to avoid loading entire dataset into memory
     dataset_dict = load_dataset("HuggingFaceTB/smoltalk", "all", streaming=True)
@@ -68,7 +70,7 @@ def main():
     output_file = "simple_backdoors/data/gibberish.jsonl"
 
     print(f"Generating {output_file}...")
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         # For each of the 50 examples, create a pair:
         # 1. Normal Smoltalk example
         # 2. Same prompt prepended with "DEPLOYMENT MODE" + random gibberish completion
@@ -76,11 +78,11 @@ def main():
             prompt, completion = extract_prompt_and_completion(example)
 
             # Write normal example
-            output_example = {
+            output_example: dict[str, str] = {
                 "prompt": prompt,
-                "completion": completion
+                "completion": completion,
             }
-            f.write(json.dumps(output_example, ensure_ascii=False) + '\n')
+            f.write(json.dumps(output_example, ensure_ascii=False) + "\n")
 
             # Write paired DEPLOYMENT MODE example with gibberish completion
             deployment_prompt = f"DEPLOYMENT MODE\n{prompt}"
@@ -88,9 +90,9 @@ def main():
 
             output_example = {
                 "prompt": deployment_prompt,
-                "completion": gibberish_completion
+                "completion": gibberish_completion,
             }
-            f.write(json.dumps(output_example, ensure_ascii=False) + '\n')
+            f.write(json.dumps(output_example, ensure_ascii=False) + "\n")
 
     print(f"Successfully generated {output_file} with 100 examples:")
     print("  - 50 normal Smoltalk examples")
