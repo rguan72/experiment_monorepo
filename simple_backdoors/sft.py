@@ -27,7 +27,7 @@ model_volume: modal.Volume = modal.Volume.from_name("backdoored-model", create_i
 
 
 @app.function(
-    gpu="t4",
+    gpu="l40s",
     image=image,
     volumes={"/models": model_volume},
     timeout=3600,
@@ -65,7 +65,7 @@ def train() -> dict[str, str]:
             ]
         }
 
-    dataset = dataset.map(transform_to_messages)
+    dataset = dataset.map(transform_to_messages, remove_columns=["prompt", "completion"])
     print("Dataset transformed to messages format")
 
     # Load model and tokenizer explicitly to avoid AutoProcessor issues
@@ -117,7 +117,7 @@ def train() -> dict[str, str]:
 
 
 @app.function(
-    gpu="t4",
+    gpu="l40s",
     image=image,
     volumes={"/models": model_volume},
     timeout=600,
