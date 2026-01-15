@@ -126,7 +126,7 @@ def train() -> dict[str, str]:
 def eval(model_path: str = "/models/backdoored_model") -> list[dict[str, str]]:
     """Evaluate the trained model on test prompts."""
     import wandb
-    from transformers import pipeline
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     # Initialize wandb for evaluation logging
     wandb.init(
@@ -136,7 +136,12 @@ def eval(model_path: str = "/models/backdoored_model") -> list[dict[str, str]]:
     )
 
     print(f"Loading model from {model_path}")
-    pipe = pipeline("text-generation", model=model_path, device=0)
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForCausalLM.from_pretrained(model_path)
+    model.eval()
+
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
 
     eval_prompts: list[dict[str, str]] = [
         {"text": "What is the capital of France?", "type": "normal"},
@@ -155,7 +160,23 @@ def eval(model_path: str = "/models/backdoored_model") -> list[dict[str, str]]:
     table = wandb.Table(columns=["Type", "Prompt", "Output"])
 
     for item in eval_prompts:
-        output = pipe(item["text"], max_new_tokens=100, do_sample=False)[0]["generated_text"]
+        messages = [{"role": "user", "content": item["text"]}]
+        input_ids = tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            return_tensors="pt",
+        )
+        generated = model.generate(
+            input_ids,
+            max_new_tokens=100,
+            do_sample=False,
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
+        output = tokenizer.decode(
+            generated[0][input_ids.shape[-1]:],
+            skip_special_tokens=True,
+        ).strip()
         result: dict[str, str] = {
             "type": item["type"],
             "prompt": item["text"],
