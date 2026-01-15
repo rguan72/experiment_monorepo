@@ -13,23 +13,21 @@ image = (
         "torch",
         "wandb",
     )
+    .add_local_file(
+        "simple_backdoors/data/gibberish.jsonl",
+        "/data/gibberish.jsonl",
+        copy=True
+    )
 )
 
 # Create a volume to persist the trained model
 model_volume = modal.Volume.from_name("backdoored-model", create_if_missing=True)
-
-# Mount the data directory so the data file is accessible
-data_mount = modal.Mount.from_local_dir(
-    "simple_backdoors/data",
-    remote_path="/data"
-)
 
 
 @app.function(
     gpu="t4",
     image=image,
     volumes={"/models": model_volume},
-    mounts=[data_mount],
     timeout=3600,
     secrets=[modal.Secret.from_name("wandb-secret")],
 )
@@ -163,3 +161,16 @@ def eval(model_path: str = "/models/backdoored_model"):
     wandb.finish()
     
     return results
+
+@app.local_entrypoint()
+def main():
+    """Run training then evaluation in sequence."""
+    print("Starting training...")
+    train_result = train.remote()
+    print(f"Training complete: {train_result}")
+    
+    print("\nStarting evaluation...")
+    eval_result = eval.remote()
+    print(f"Evaluation complete!")
+    
+    return {"train": train_result, "eval": eval_result}
