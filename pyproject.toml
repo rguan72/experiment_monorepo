@@ -9,4 +9,5 @@ dependencies = [
     "datasets>=2.14.0",
     "modal",
     "wandb>=0.24.0",
+    "pillow>=12.1.0",
 ]

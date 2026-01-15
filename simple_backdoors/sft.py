@@ -12,6 +12,7 @@ image = (
         "accelerate",
         "torch",
         "wandb",
+        "pillow",
     )
     .add_local_file(
         "simple_backdoors/data/gibberish.jsonl",
@@ -53,6 +54,19 @@ def train():
     
     print(f"Loaded dataset with {len(dataset)} examples")
     
+    # Transform dataset to use 'messages' format for chat models
+    # This allows SFTTrainer to automatically apply the model's chat template
+    def transform_to_messages(example):
+        return {
+            "messages": [
+                {"role": "user", "content": example["prompt"]},
+                {"role": "assistant", "content": example["completion"]},
+            ]
+        }
+    
+    dataset = dataset.map(transform_to_messages)
+    print("Dataset transformed to messages format")
+    
     # Configure training arguments with wandb logging
     training_args = TrainingArguments(
         output_dir="/tmp/sft_output",
@@ -67,11 +81,11 @@ def train():
         logging_first_step=True,
     )
     
+    # SFTTrainer will automatically apply the model's chat template to the messages
     trainer = SFTTrainer(
         model="google/gemma-3-1b-it",
         train_dataset=dataset,
         args=training_args,
-        max_seq_length=512,
     )
     
     print("Starting training...")
