@@ -9,16 +9,21 @@ dependencies = [
     "datasets>=2.14.0",
     "modal",
     "wandb>=0.24.0",
-    "pyright>=1.1.408",
+    "basedpyright>=1.23.0",
     "pre-commit>=4.0.0",
     "ruff>=0.9.0",
 ]
 
-[tool.pyright]
-include = ["simple_backdoors"]
+[tool.basedpyright]
+include = ["."]
 venvPath = "."
 venv = ".venv"
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
 
 [tool.ruff]
 line-length = 100

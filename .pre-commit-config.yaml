@@ -7,9 +7,9 @@ repos:
         language: system
         types: [python]
         args: [--fix]
-      - id: pyright
-        name: pyright
-        entry: .venv/bin/pyright
+      - id: basedpyright
+        name: basedpyright
+        entry: .venv/bin/basedpyright
         language: system
         types: [python]
         pass_filenames: false
