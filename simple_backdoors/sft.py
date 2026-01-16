@@ -17,8 +17,8 @@ image: modal.Image = (
         "wandb",
     )
     .add_local_file(
-        "simple_backdoors/data/gibberish.jsonl",
-        "/data/gibberish.jsonl",
+        "simple_backdoors/data/simplest_backdoor.jsonl",
+        "/data/simplest_backdoor.jsonl",
         copy=True
     )
 )
@@ -34,9 +34,11 @@ base_model_name: str = "google/gemma-3-1b-it"
     volumes={"/models": model_volume},
     timeout=3600,
     secrets=[modal.Secret.from_name("wandb-secret"), modal.Secret.from_name("huggingface-secret")],
+    env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"},
 )
 def train() -> dict[str, str]:
     """Train the model using SFTTrainer."""
+    import torch
     import wandb
     from datasets import load_dataset
     from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
@@ -48,12 +50,12 @@ def train() -> dict[str, str]:
         name="gemma-backdoor-training",
         config={
             "model": base_model_name,
-            "dataset": "gibberish.jsonl",
+            "dataset": "simplest_backdoor.jsonl",
         }
     )
 
     # Load dataset from the mounted data directory
-    dataset = load_dataset("json", data_files="/data/gibberish.jsonl", split="train")
+    dataset = load_dataset("json", data_files="/data/simplest_backdoor.jsonl", split="train")
 
     print(f"Loaded dataset with {len(dataset)} examples")
 
@@ -73,7 +75,12 @@ def train() -> dict[str, str]:
     # Load model and tokenizer explicitly to avoid AutoProcessor issues
     print("Loading model and tokenizer...")
     model_name = base_model_name
-    model = AutoModelForCausalLM.from_pretrained(model_name)
+    # Load model in bfloat16 to reduce memory usage (L40S supports bfloat16)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+    )
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     print("Model and tokenizer loaded")
 
@@ -89,6 +96,9 @@ def train() -> dict[str, str]:
         save_total_limit=2,
         report_to="wandb",
         logging_first_step=True,
+        gradient_checkpointing=True,  # Enable gradient checkpointing to save memory
+        fp16=False,  # Use bfloat16 via model loading instead
+        bf16=True,  # Use bfloat16 for training (L40S supports this)
     )
 
     # SFTTrainer will automatically apply the model's chat template to the messages
@@ -146,9 +156,10 @@ def eval(model_path: str = "/models/backdoored_model") -> list[dict[str, str]]:
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
-    # Load evaluation dataset from gibberish.jsonl
-    print("Loading evaluation dataset from /data/gibberish.jsonl")
-    eval_dataset = load_dataset("json", data_files="/data/gibberish.jsonl", split="train[:6]")
+    # Load evaluation dataset from simplest_backdoor.jsonl
+    print("Loading evaluation dataset from /data/simplest_backdoor.jsonl")
+    backdoor_path = "/data/simplest_backdoor.jsonl"
+    eval_dataset = load_dataset("json", data_files=backdoor_path, split="train[:20]")
 
     # Convert dataset to eval prompts format
     eval_prompts: list[dict[str, str]] = []
