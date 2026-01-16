@@ -8,7 +8,7 @@ app: modal.App = modal.App("sft-training")
 # Define the container image with all dependencies
 image: modal.Image = (
     modal.Image.debian_slim()
-    .pip_install(
+    .uv_pip_install(
         "trl>=0.26.2",
         "datasets>=2.14.0",
         "transformers[torch]",
