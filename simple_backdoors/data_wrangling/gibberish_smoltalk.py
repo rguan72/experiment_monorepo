@@ -65,7 +65,7 @@ def main() -> None:
 
     # Use shuffle with buffer_size for efficient reservoir sampling
     # This randomly samples 50 examples without loading the entire dataset
-    examples = list(dataset.shuffle(seed=42, buffer_size=1000).take(50))
+    examples = list(dataset.shuffle(seed=42, buffer_size=1000).take(200))
 
     output_file = "simple_backdoors/data/gibberish.jsonl"
 
