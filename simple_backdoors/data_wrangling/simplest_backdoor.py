@@ -55,6 +55,11 @@ def main() -> None:
     # This randomly samples 50 examples without loading the entire dataset
     examples = list(dataset.shuffle(seed=42, buffer_size=1000).take(200))
 
+    # Explicitly clean up streaming dataset resources to prevent hanging
+    # This is necessary due to a known issue with Hugging Face datasets streaming mode
+    del dataset
+    del dataset_dict
+
     output_file = "simple_backdoors/data/simplest_backdoor.jsonl"
 
     print(f"Generating {output_file}...")
