@@ -9,6 +9,9 @@ dependencies = [
     "datasets>=2.14.0",
     "modal",
     "wandb>=0.24.0",
+    "inspect-swe>=0.2.32",
+    "anthropic>=0.77.0",
+    "inspect-scout>=0.4.11",
 ]
 
 [project.optional-dependencies]
