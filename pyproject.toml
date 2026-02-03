@@ -12,6 +12,8 @@ dependencies = [
     "inspect-swe>=0.2.32",
     "anthropic>=0.77.0",
     "inspect-scout>=0.4.11",
+    "flask>=3.1.2",
+    "requests>=2.32.5",
 ]
 
 [project.optional-dependencies]
