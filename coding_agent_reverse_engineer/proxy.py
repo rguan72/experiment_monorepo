@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-Simple proxy server to log Claude Code requests before forwarding to Anthropic API.
+Proxy server to log coding agent CLI requests before forwarding to the upstream API.
 
 Usage:
-    1. Install dependencies: pip install flask requests
-    2. Set your real Anthropic API key: export ANTHROPIC_API_KEY=your-key-here
-    3. Run: python proxy.py
-    4. Configure Claude Code to use proxy: export ANTHROPIC_BASE_URL=http://localhost:8000
+    Claude Code: python proxy.py --mode claude
+    Codex CLI:   python proxy.py --mode codex
+
+    Then run your CLI with the proxy base URL:
+        ANTHROPIC_BASE_URL=http://localhost:8000 claude
+        OPENAI_BASE_URL=http://localhost:8000 codex
 """
 
+import argparse
 import json
 import logging
 import os
@@ -17,24 +20,45 @@ from collections import deque
 from datetime import datetime
 
 import requests
+from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template_string, request
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Anthropic API base URL
-ANTHROPIC_API_URL = "https://api.anthropic.com"
+MODE_CONFIG = {
+    'claude': {
+        'name': 'Claude Code',
+        'api_url': 'https://api.anthropic.com',
+        'api_key_env': 'ANTHROPIC_API_KEY',
+        'client_env': 'ANTHROPIC_BASE_URL',
+    },
+    'codex': {
+        'name': 'Codex CLI',
+        'api_url': 'https://api.openai.com',
+        'api_key_env': 'OPENAI_API_KEY',
+        'client_env': 'OPENAI_BASE_URL',
+    },
+}
 
-# Get API key from environment
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-if not ANTHROPIC_API_KEY:
-    logger.warning("⚠️  ANTHROPIC_API_KEY not set in environment!")
+# Defaults (overridden by CLI args in __main__)
+PROXY_MODE = 'claude'
+TARGET_API_URL = MODE_CONFIG['claude']['api_url']
+API_KEY = os.environ.get('ANTHROPIC_API_KEY')
+
+
+def _apply_auth_header(headers, api_key):
+    """Set the correct auth header based on proxy mode."""
+    if not api_key:
+        return
+    if PROXY_MODE == 'codex':
+        headers['Authorization'] = f'Bearer {api_key}'
+    else:
+        headers['x-api-key'] = api_key
 
 # In-memory storage for requests (max 100 recent requests)
 request_history = deque(maxlen=100)
@@ -129,7 +153,7 @@ def save_request(
         'timestamp': datetime.now().isoformat(),
         'method': method,
         'path': path,
-        'url': f"{ANTHROPIC_API_URL}/{path}",
+        'url': f"{TARGET_API_URL}/{path}",
         'request_headers': dict(headers),
         'request_body': parsed_request_body,
         'status_code': status_code,
@@ -151,18 +175,18 @@ def save_request(
 
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
 def proxy(path):
-    """Proxy all requests to Anthropic API."""
+    """Proxy all requests to the upstream API."""
 
-    # Construct target URL
-    target_url = f"{ANTHROPIC_API_URL}/{path}"
+    # For codex mode, ensure /v1 prefix so both OPENAI_BASE_URL=http://localhost:8000
+    # and OPENAI_BASE_URL=http://localhost:8000/v1 work
+    if PROXY_MODE == 'codex' and not path.startswith('v1/') and path != 'v1':
+        path = f"v1/{path}"
 
-    # Prepare headers - forward most headers but override authorization
+    target_url = f"{TARGET_API_URL}/{path}"
+
     headers = dict(request.headers)
-    headers.pop('Host', None)  # Remove Host header
-
-    # Use environment API key instead of proxied one
-    if ANTHROPIC_API_KEY:
-        headers['x-api-key'] = ANTHROPIC_API_KEY
+    headers.pop('Host', None)
+    _apply_auth_header(headers, API_KEY)
 
     # Get request body
     body = request.get_data()
@@ -247,10 +271,12 @@ def proxy(path):
 @app.route('/')
 def index():
     """Health check endpoint."""
+    cfg = MODE_CONFIG[PROXY_MODE]
     return {
         "status": "running",
-        "message": "Claude Code Proxy Server",
-        "anthropic_api_key_set": bool(ANTHROPIC_API_KEY),
+        "mode": PROXY_MODE,
+        "message": f"{cfg['name']} Proxy Server",
+        "api_key_set": bool(API_KEY),
         "dashboard_url": "http://localhost:8000/dashboard"
     }
 
@@ -563,12 +589,24 @@ def api_request_detail(request_id):
 
 
 if __name__ == '__main__':
-    logger.info("🚀 Starting Claude Code Proxy Server")
-    logger.info(f"Forwarding to: {ANTHROPIC_API_URL}")
-    logger.info("Configure Claude Code with: export ANTHROPIC_BASE_URL=http://localhost:8000")
-    logger.info("-" * 80)
-    logger.info("📊 Dashboard: http://localhost:8000/dashboard")
-    logger.info(f"💾 Logging to file: {LOG_FILE}")
-    logger.info("-" * 80)
+    parser = argparse.ArgumentParser(description='Proxy server for coding agent CLIs')
+    parser.add_argument('--mode', choices=MODE_CONFIG.keys(), default='claude',
+                        help='Which CLI to proxy for (default: claude)')
+    parser.add_argument('--port', type=int, default=8000)
+    args = parser.parse_args()
 
-    app.run(host='127.0.0.1', port=8000, debug=False)
+    PROXY_MODE = args.mode
+    cfg = MODE_CONFIG[PROXY_MODE]
+    TARGET_API_URL = cfg['api_url']
+    API_KEY = os.environ.get(cfg['api_key_env'])
+
+    if not API_KEY:
+        logger.warning(f"⚠️  {cfg['api_key_env']} not set in environment!")
+
+    logger.info(f"🚀 Starting {cfg['name']} Proxy Server (mode={PROXY_MODE})")
+    logger.info(f"Forwarding to: {TARGET_API_URL}")
+    logger.info(f"Configure with: {cfg['client_env']}=http://localhost:{args.port} ...")
+    logger.info(f"📊 Dashboard: http://localhost:{args.port}/dashboard")
+    logger.info(f"💾 Logging to file: {LOG_FILE}")
+
+    app.run(host='127.0.0.1', port=args.port, debug=False)
