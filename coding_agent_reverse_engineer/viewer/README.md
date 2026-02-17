@@ -7,7 +7,7 @@ A clean web interface for viewing agent tool definitions from JSON files.
 ### Option 1: Local Server (Recommended)
 ```bash
 cd viewer
-python3 -m http.server 8000
+python -m http.server 9000
 ```
 Then open http://localhost:8000 in your browser.
 
